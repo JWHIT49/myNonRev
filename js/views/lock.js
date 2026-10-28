@@ -1,6 +1,7 @@
 // The lock screen: first run creates the vault, afterwards it unlocks it.
-import { h } from '../dom.js';
+import { h, icon } from '../dom.js';
 import * as vault from '../vault.js';
+import * as biometric from '../biometric.js';
 import { confirmSheet, passwordField, toast } from '../ui.js';
 import { restoreFlow } from '../backup.js';
 
@@ -50,6 +51,23 @@ function unlockView() {
   const pass = passwordField({ label: 'Passphrase', autocomplete: 'current-password', name: 'passphrase' });
   const error = h('p', { class: 'form-error', role: 'alert', hidden: true });
   const submit = h('button', { type: 'submit', class: 'btn primary block' }, 'Unlock');
+  const useBio = biometric.isEnabled();
+  const bioBtn = useBio ? h('button', { type: 'button', class: 'btn block' }, icon('unlock', 18), `Unlock with ${biometric.label()}`) : null;
+
+  const showError = (msg) => { error.textContent = msg; error.hidden = false; };
+
+  async function tryBiometric() {
+    error.hidden = true;
+    bioBtn.disabled = true;
+    const result = await biometric.unlockWithBiometrics();
+    // On success the vault notifies and this screen is replaced.
+    if (result === 'stale') {
+      bioBtn.hidden = true;
+      showError(`${biometric.label()} was turned off because your passphrase or enrolled faces changed. Enter your passphrase, then turn it on again in Settings.`);
+    } else if (result === 'failed') showError(`${biometric.label()} did not work. Enter your passphrase instead.`);
+    if (result !== 'ok') { bioBtn.disabled = false; if (result !== 'stale') pass.input.focus(); }
+  }
+  bioBtn?.addEventListener('click', tryBiometric);
 
   const form = h('form', { class: 'stack', novalidate: true }, pass.el, error, submit);
   form.addEventListener('submit', async (e) => {
@@ -61,8 +79,7 @@ function unlockView() {
     try {
       await vault.unlock(pass.input.value);
     } catch (err) {
-      error.textContent = err.message || 'Could not unlock.';
-      error.hidden = false;
+      showError(err.message || 'Could not unlock.');
       submit.disabled = false;
       submit.textContent = 'Unlock';
       pass.input.select();
@@ -77,6 +94,7 @@ function unlockView() {
     });
     if (!ok) return;
     vault.erase();
+    await biometric.disable();
     toast('Vault erased.');
   }
 
@@ -86,9 +104,11 @@ function unlockView() {
       logo(),
       h('h1', null, 'myNonRev'),
       h('p', { class: 'muted center' }, 'Locked'),
+      bioBtn,
       form,
       h('button', { type: 'button', class: 'link-btn', onclick: forgot }, 'Forgot passphrase?')),
-    onMount: () => pass.input.focus(),
+    // With Face ID on, scan straight away. The passphrase field is not focused first: its keyboard would cover the prompt.
+    onMount: () => { if (useBio) tryBiometric(); else pass.input.focus(); },
   };
 }
 

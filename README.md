@@ -22,7 +22,7 @@ The autofill engine is a straight port of the RouteMe one (username, Next, passw
 ## Features
 
 - **Encrypted vault**: logins are encrypted with a key wrapped by your passphrase (PBKDF2-SHA-256, 600,000 iterations, AES-GCM). The vault is ciphertext at rest and only decrypted in memory while unlocked.
-- **Auto-lock** when you leave the app or it sits idle (On leave / 1 / 5 / 15 min).
+- **Auto-lock** when you leave the app or it sits idle (On leave / 1 / 5 / 15 min), and **Face ID** unlock in the native app.
 - **One-tap launcher** for every portal, plus copy buttons for username and password. Copied passwords are wiped from the clipboard after 30 seconds (browsers only allow this while the app is in front, so it happens when you return to it).
 - **Autofill bookmarklet** for hands-off sign-in on the airline's own page (see below).
 - **Custom portals** with their own name, address and colour.
@@ -89,7 +89,11 @@ Locally, `npm run cap:sync` copies the web files and plugins into `ios/`, and `n
 
 **What is verified and what is not:** the web layer, the in-app browser wiring (against a stand-in for the plugin) and the exact injected script (against the fake-airline fixture) are tested. The Xcode build, the signing, and the real in-app browser on a device have **not** been run, because that needs a Mac and an iPhone. Expect to fix small things on the first TestFlight build.
 
-Native pieces used: [@capgo/capacitor-inappbrowser](https://github.com/Cap-go/capacitor-inappbrowser) (in-app browser with script injection), `@capacitor/preferences` (durable vault copy), `filesystem` and `share` (backup export), `status-bar`.
+Native pieces used: [@capgo/capacitor-inappbrowser](https://github.com/Cap-go/capacitor-inappbrowser) (in-app browser with script injection), [@capgo/capacitor-native-biometric](https://github.com/Cap-go/capacitor-native-biometric) (Face ID), `@capacitor/preferences` (durable vault copy), `filesystem` and `share` (backup export), `status-bar`.
+
+### Face ID
+
+In the native app, **Settings, Unlock with Face ID** keeps your passphrase in the iOS Keychain behind a biometric access control (`BIOMETRY_CURRENT_SET`). The Keychain releases it only after a successful scan, and discards it if the enrolled faces change. The lock screen then scans by itself; cancel and you can type the passphrase as usual. The vault stays encrypted exactly as before. Face ID turns itself off (with a message) if the stored passphrase stops working, and it follows a passphrase change, restore or erase. There is deliberately no device-passcode fallback for this item: the passphrase is the fallback.
 
 ## Project layout
 
@@ -104,6 +108,7 @@ js/autofill/engine.js                      sign-in state machine (ported from Ro
 js/autofill/bookmarklet.js                 login codes and bookmarklet builder (browser)
 js/autofill/inject.js                      the script injected by the native in-app browser
 js/native.js, js/inapp.js                  bridge to the native shell; the in-app browser
+js/biometric.js                            Face ID unlock (native app)
 js/portals.js                              portal catalogue and custom portals
 js/views/                                  lock, home, portal, edit, autofill, settings
 capacitor.config.json, ios/                native shell (Xcode project)

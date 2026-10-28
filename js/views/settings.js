@@ -7,6 +7,59 @@ import { checkForUpdates, clearOfflineCache, getBuildInfo, isStandalone, offline
 import { confirmSheet, openSheet, passwordField, row, segmented, toast } from '../ui.js';
 import { exportBackup, restoreFlow } from '../backup.js';
 import { isNative } from '../native.js';
+import * as biometric from '../biometric.js';
+
+function enableBiometricSheet(name, onDone) {
+  const pass = passwordField({ label: 'Your passphrase', autocomplete: 'current-password', hint: `Checked now, then kept in the iOS Keychain where only ${name} can release it.` });
+  const error = h('p', { class: 'form-error', role: 'alert', hidden: true });
+  const go = h('button', { type: 'button', class: 'btn primary' }, `Turn on ${name}`);
+  const sheet = openSheet({
+    title: `Unlock with ${name}`,
+    content: h('div', { class: 'stack-sm' }, pass.el, error),
+    actions: [h('button', { type: 'button', class: 'btn ghost', onclick: () => sheet.close() }, 'Cancel'), go],
+  });
+  go.addEventListener('click', async () => {
+    error.hidden = true;
+    go.disabled = true;
+    try {
+      await biometric.enable(pass.input.value);
+      sheet.close();
+      onDone();
+      toast(`${name} is on. Your passphrase still works too.`);
+    } catch (err) {
+      error.textContent = err.message || `Could not turn on ${name}.`;
+      error.hidden = false;
+      go.disabled = false;
+    }
+  });
+}
+
+function biometricRow() {
+  if (!isNative()) return null;
+  const title = h('span', { class: 'row-title' }, 'Unlock with Face ID');
+  const sub = h('span', { class: 'row-sub' }, 'Checking…');
+  const state = h('span', { class: 'chip soft' }, '');
+  const el = h('button', { type: 'button', class: 'row', disabled: true }, h('span', { class: 'row-main' }, title, sub), state);
+  biometric.check().then(({ available, label: name }) => {
+    title.textContent = `Unlock with ${name}`;
+    if (!available) { sub.textContent = `Not available. Set up ${name} and a passcode in iOS Settings.`; return; }
+    const paint = () => {
+      const on = biometric.isEnabled();
+      state.textContent = on ? 'On' : 'Off';
+      state.className = on ? 'chip' : 'chip soft';
+      sub.textContent = on ? 'Scan to open the vault. Your passphrase still works.' : 'Open the vault with a scan instead of typing your passphrase.';
+    };
+    paint();
+    el.disabled = false;
+    el.addEventListener('click', async () => {
+      if (!biometric.isEnabled()) { enableBiometricSheet(name, paint); return; }
+      await biometric.disable();
+      paint();
+      toast(`${name} is off.`);
+    });
+  });
+  return el;
+}
 
 function changePassphraseSheet() {
   const current = passwordField({ label: 'Current passphrase', autocomplete: 'current-password' });
@@ -27,6 +80,7 @@ function changePassphraseSheet() {
     save.textContent = 'Changing…';
     try {
       await vault.changePassphrase(current.input.value, next.input.value);
+      await biometric.refresh(next.input.value);
       sheet.close();
       toast('Passphrase changed. Old backups still need the passphrase they were made with.', { duration: 6000 });
     } catch (err) {
@@ -45,6 +99,7 @@ async function eraseEverything() {
   });
   if (!ok) return;
   vault.erase();
+  await biometric.disable();
   toast('All data erased.');
 }
 
@@ -73,6 +128,8 @@ export function settingsView() {
         h('div', { class: 'btn-row wrap' },
           h('button', { type: 'button', class: 'btn grow', onclick: () => vault.lock() }, icon('lock', 18), 'Lock now'),
           h('button', { type: 'button', class: 'btn grow', onclick: changePassphraseSheet }, icon('key', 18), 'Change passphrase'))),
+
+      isNative() ? h('div', { class: 'card list' }, biometricRow()) : null,
 
       h('h2', { class: 'section-title' }, 'Backup'),
       h('div', { class: 'card stack-sm' },

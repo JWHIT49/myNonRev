@@ -140,6 +140,11 @@ export function save(mutator) {
   return result;
 }
 
+/** Throws VaultError('bad-passphrase') unless this is the vault's passphrase. Does not unlock anything. */
+export async function verifyPassphrase(passphrase) {
+  await open(parseEnvelope(readRaw() ?? ''), passphrase);
+}
+
 export async function changePassphrase(oldPassphrase, newPassphrase, { iterations = PBKDF2_ITERATIONS } = {}) {
   checkPassphrase(newPassphrase);
   const env = parseEnvelope(readRaw());

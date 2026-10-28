@@ -3,6 +3,7 @@ import { h } from './dom.js';
 import * as vault from './vault.js';
 import { openSheet, passwordField, toast } from './ui.js';
 import { isNative, plugin } from './native.js';
+import * as biometric from './biometric.js';
 
 export async function exportBackup() {
   const text = vault.exportBackup();
@@ -76,6 +77,7 @@ function askPassphrase(text, replacing) {
     error.hidden = true;
     try {
       await vault.importBackup(text, pass.input.value);
+      await biometric.refresh(pass.input.value);
       sheet.close();
       toast('Backup restored.');
     } catch (err) {

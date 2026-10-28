@@ -1,6 +1,6 @@
 // Non-secret preferences (never anything from the vault). Falls back to memory when storage is blocked.
 const KEY = 'mynonrev.settings';
-const DEFAULTS = { theme: 'system', autoLockMin: 5, installHintDismissed: false };
+const DEFAULTS = { theme: 'system', autoLockMin: 5, installHintDismissed: false, biometric: false, biometricLabel: 'Face ID' };
 
 let memory = null;
 
