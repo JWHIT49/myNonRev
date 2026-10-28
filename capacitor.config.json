@@ -1,0 +1,13 @@
+{
+  "appId": "com.jwhit49.routeme",
+  "appName": "myNonRev",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0b1a3a",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "StatusBar": { "style": "DARK", "overlaysWebView": true }
+  }
+}

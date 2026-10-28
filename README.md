@@ -4,18 +4,20 @@ An offline-first **PWA** that keeps your airline nonrev logins in an **encrypted
 
 Built-in portals: **American Airlines** (Travel Planner), **Delta** (TravelNet), **myIDTravel**, **United**, **Southwest**. You can add your own in the app.
 
-## What changed from the native app (and why)
+## Two ways to run it
 
-The native app opened each airline site inside a WebView and injected a script into it. **A web app cannot do that**: browsers block scripts and iframes from reaching into another site. So the PWA splits the job in two:
+The same code runs in two places, and the difference matters for sign-in:
 
-| | Native app | PWA |
+| | Browser / Home Screen PWA | **Native iPhone app** (Capacitor) |
 |---|---|---|
-| Storing logins | iOS Keychain | AES-GCM encrypted vault, unlocked with a passphrase |
-| Opening a portal | In-app WebView | Opens the site in a browser tab |
-| Typing the login | Injected automatically | **Copy buttons**, or the **autofill bookmarklet** (below) |
-| Lock | Face ID | Passphrase, with auto-lock (Face ID is not possible without a native app) |
+| Opening a portal | A browser tab | **Inside the app** (a real in-app browser) |
+| Signing in | Copy buttons, or the autofill bookmarklet | **Automatic**: the sign-in engine is injected into every page, like the old RouteMe app |
+| Vault storage | Browser `localStorage` | `localStorage` plus a durable copy in native storage |
+| Installing | Add to Home Screen | TestFlight (build described below) |
 
-The autofill engine itself is a straight port of the RouteMe one (username, Next, password, Sign in, then click-through steps), so the sign-in behaviour is the same once it runs.
+**Why the PWA alone can't log in inside the app:** a web app cannot run scripts inside another site's page, and airline sites refuse to be framed. Only a native web view can, which is why the native shell exists. The PWA's bookmarklet is the best a browser can do.
+
+The autofill engine is a straight port of the RouteMe one (username, Next, password, Sign in, then click-through steps), so sign-in behaves the same.
 
 ## Features
 
@@ -27,7 +29,9 @@ The autofill engine itself is a straight port of the RouteMe one (username, Next
 - **Encrypted backup** export and restore (new phone, or insurance against Safari clearing site data).
 - Works **offline**, installs to the Home Screen, light/dark theme, update prompt when a new version is deployed.
 
-## Autofill: how it works
+## Autofill in a browser: how the bookmarklet works
+
+(The native app does not need this: it signs in inside its own browser. The Autofill tab is hidden there.)
 
 1. Open **Autofill** in the app and tap **Set up autofill**. This makes a random key that lives only in your vault.
 2. Tap **Copy bookmark code**, then in Safari create a bookmark named *myNonRev* and paste the code as its address (the app lists the exact steps).
@@ -73,6 +77,20 @@ npm run check         # CI: fail if those generated files are stale
 
 Portals are defined in [js/portals.js](js/portals.js). Each `navSteps` entry is `{ text: 'regex', label: 'Friendly name', timeout: 12000 }`, where `text` is a case-insensitive regular expression matched against a link or button's visible text. American's two steps are enabled; the others ship empty. After editing, run `npm test` (it checks every regex compiles) and `npm run build`. The steps travel inside the encrypted login code each time, so the bookmark does not need to be reinstalled.
 
+## Build the native iPhone app
+
+The Xcode project is in `ios/` (Capacitor 8, Swift Package Manager, iOS 15+, bundle ID `com.jwhit49.routeme`, the same App Store Connect record as the old app). You do not need a Mac: GitHub builds it.
+
+1. Add four repository secrets (Settings, Secrets and variables, Actions): `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, and `ASC_KEY_P8` (the contents of an App Store Connect API key `.p8`). The steps to create the key are at the top of [.github/workflows/ios.yml](.github/workflows/ios.yml).
+2. Actions tab, **iOS build and TestFlight**, **Run workflow**. It runs the tests, copies the web files into the Xcode project, signs with cloud-managed certificates, and uploads to TestFlight.
+3. Install from TestFlight on your iPhone. A build number must be higher than every one already in App Store Connect; the workflow uses `1000 + run number` unless you give one.
+
+Locally, `npm run cap:sync` copies the web files and plugins into `ios/`, and `npm run cap:open` opens Xcode on a Mac.
+
+**What is verified and what is not:** the web layer, the in-app browser wiring (against a stand-in for the plugin) and the exact injected script (against the fake-airline fixture) are tested. The Xcode build, the signing, and the real in-app browser on a device have **not** been run, because that needs a Mac and an iPhone. Expect to fix small things on the first TestFlight build.
+
+Native pieces used: [@capgo/capacitor-inappbrowser](https://github.com/Cap-go/capacitor-inappbrowser) (in-app browser with script injection), `@capacitor/preferences` (durable vault copy), `filesystem` and `share` (backup export), `status-bar`.
+
 ## Project layout
 
 ```
@@ -83,9 +101,12 @@ icons/                                     app icons
 js/main.js                                 boot, routes, lock guard
 js/crypto.js, js/vault.js                  encryption primitives and the encrypted vault
 js/autofill/engine.js                      sign-in state machine (ported from RouteMe)
-js/autofill/bookmarklet.js                 login codes and bookmarklet builder
+js/autofill/bookmarklet.js                 login codes and bookmarklet builder (browser)
+js/autofill/inject.js                      the script injected by the native in-app browser
+js/native.js, js/inapp.js                  bridge to the native shell; the in-app browser
 js/portals.js                              portal catalogue and custom portals
 js/views/                                  lock, home, portal, edit, autofill, settings
-tools/                                     build and dev server
+capacitor.config.json, ios/                native shell (Xcode project)
+tools/                                     build, dev server, staging for the native app
 tests/                                     node:test suites and a fake-airline fixture
 ```

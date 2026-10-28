@@ -6,6 +6,7 @@ import { badge, confirmSheet, toast } from '../ui.js';
 import { copySecret, copyText } from '../clip.js';
 import { autofillReady, openPortal } from '../launch.js';
 import * as router from '../router.js';
+import { isNative } from '../native.js';
 
 const REVEAL_MS = 15_000;
 
@@ -64,7 +65,7 @@ export function portalView({ params }) {
       h('div', { class: 'btn-row wrap' },
         h('button', { type: 'button', class: 'btn primary grow', onclick: () => openPortal(portal) }, icon(sign ? 'bolt' : 'external', 18), sign ? 'Open & sign in' : 'Open site'),
         sign ? h('button', { type: 'button', class: 'btn grow', onclick: () => openPortal(portal, { autofill: false }) }, icon('external', 18), 'Open site only') : null),
-      saved && !data.autofillKey ? h('a', { class: 'notice link', href: '#/autofill' }, icon('bolt', 22), h('div', { class: 'notice-text' }, h('b', null, 'Sign in automatically'), h('span', null, 'Set up autofill once and this button signs you in on the airline’s page.')), icon('chevron-right', 18)) : null,
+      saved && !data.autofillKey && !isNative() ? h('a', { class: 'notice link', href: '#/autofill' }, icon('bolt', 22), h('div', { class: 'notice-text' }, h('b', null, 'Sign in automatically'), h('span', null, 'Set up autofill once and this button signs you in on the airline’s page.')), icon('chevron-right', 18)) : null,
       saved
         ? h('div', { class: 'card' },
           h('h3', null, icon('key', 18), 'Saved login'),

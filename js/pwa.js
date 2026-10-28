@@ -1,5 +1,6 @@
 // Service worker registration, update prompts and offline-cache helpers.
 import { toast } from './ui.js';
+import { isNative } from './native.js';
 
 export const isStandalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
 
@@ -40,7 +41,8 @@ export async function clearOfflineCache({ reload = true } = {}) {
 }
 
 export async function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return;
+  // The native app ships its files inside the app, and web views on a custom scheme do not run service workers anyway.
+  if (isNative() || !('serviceWorker' in navigator)) return;
   if (new URLSearchParams(location.search).has('nosw')) { await clearOfflineCache({ reload: false }); return; }
   hadController = Boolean(navigator.serviceWorker.controller);
   try {

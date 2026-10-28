@@ -6,6 +6,7 @@ import { restartAutoLock } from '../autolock.js';
 import { checkForUpdates, clearOfflineCache, getBuildInfo, isStandalone, offlineReady } from '../pwa.js';
 import { confirmSheet, openSheet, passwordField, row, segmented, toast } from '../ui.js';
 import { exportBackup, restoreFlow } from '../backup.js';
+import { isNative } from '../native.js';
 
 function changePassphraseSheet() {
   const current = passwordField({ label: 'Current passphrase', autocomplete: 'current-password' });
@@ -85,13 +86,14 @@ export function settingsView() {
         segmented({ options: [{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], value: store.get('theme'), label: 'Theme',
           onChange: (v) => { store.set('theme', v); applyAppearance(); } })),
 
-      h('h2', { class: 'section-title' }, 'App'),
-      h('div', { class: 'card list' },
-        update,
-        row({ title: 'Clear offline copy', sub: 'Re-downloads the app. Your saved logins are not touched.', chevron: false, onClick: async () => {
-          const ok = await confirmSheet({ title: 'Clear offline copy?', message: 'The app re-downloads itself the next time you open it with a connection. Your vault is not affected.', confirmLabel: 'Clear' });
-          if (ok) clearOfflineCache();
-        } })),
+      // Updates and the offline copy belong to the browser version: the native app updates through TestFlight.
+      ...(isNative() ? [] : [h('h2', { class: 'section-title' }, 'App'),
+        h('div', { class: 'card list' },
+          update,
+          row({ title: 'Clear offline copy', sub: 'Re-downloads the app. Your saved logins are not touched.', chevron: false, onClick: async () => {
+            const ok = await confirmSheet({ title: 'Clear offline copy?', message: 'The app re-downloads itself the next time you open it with a connection. Your vault is not affected.', confirmLabel: 'Clear' });
+            if (ok) clearOfflineCache();
+          } }))]),
 
       h('div', { class: 'card danger-zone' },
         h('button', { type: 'button', class: 'btn danger-outline block', onclick: eraseEverything }, icon('trash', 18), 'Erase all data')),

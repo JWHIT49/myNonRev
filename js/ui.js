@@ -1,5 +1,6 @@
 // Shared UI components: toasts, bottom sheets, confirm dialogs, segmented controls, list rows.
 import { h, icon } from './dom.js';
+import { isNative } from './native.js';
 
 export function toast(message, { action = null, duration = 3500, sticky = false } = {}) {
   const root = document.getElementById('toast-root');
@@ -154,7 +155,7 @@ export function passwordField({ label, value = '', autocomplete = 'off', hint = 
 export function installHint({ dismissed, onDismiss }) {
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-  if (!isIOS || standalone || dismissed) return null;
+  if (!isIOS || standalone || dismissed || isNative()) return null;
   const el = h('div', { class: 'notice' },
     icon('share', 22),
     h('div', { class: 'notice-text' },

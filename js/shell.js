@@ -3,8 +3,11 @@
 //     onMount?, onLeave? }
 import { h, icon } from './dom.js';
 import { closeAllSheets } from './ui.js';
+import { isNative } from './native.js';
 
-const TABS = [['home', 'Portals', 'plane', '#/'], ['autofill', 'Autofill', 'bolt', '#/autofill'], ['settings', 'Settings', 'sliders', '#/settings']];
+// The bookmarklet setup is only needed in a browser: the native app signs in inside its own browser.
+const TABS = [['home', 'Portals', 'plane', '#/'], ['autofill', 'Autofill', 'bolt', '#/autofill'], ['settings', 'Settings', 'sliders', '#/settings']]
+  .filter(([id]) => !(isNative() && id === 'autofill'));
 let current = null;
 
 const $ = (id) => document.getElementById(id);

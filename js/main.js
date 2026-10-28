@@ -6,6 +6,7 @@ import * as vault from './vault.js';
 import { startAutoLock } from './autolock.js';
 import { closeAllSheets, toast } from './ui.js';
 import { lockView } from './views/lock.js';
+import { initNative } from './native.js';
 import { homeView } from './views/home.js';
 import { portalView } from './views/portal.js';
 import { editView } from './views/edit.js';
@@ -31,6 +32,7 @@ vault.onLockChange((unlocked) => {
 });
 
 startAutoLock();
+await initNative();
 router.start(mount);
 registerServiceWorker();
 

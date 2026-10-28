@@ -1,0 +1,120 @@
+name: iOS build and TestFlight
+
+# Builds the native myNonRev app on a Mac in the cloud and (optionally) uploads it to TestFlight.
+# Run it by hand: Actions tab -> "iOS build and TestFlight" -> Run workflow.
+#
+# ONE-TIME SETUP (repository Settings -> Secrets and variables -> Actions -> New repository secret):
+#   APPLE_TEAM_ID   your 10-character Apple Developer Team ID (developer.apple.com -> Membership details)
+#   ASC_KEY_ID      App Store Connect API key ID
+#   ASC_ISSUER_ID   App Store Connect API issuer ID
+#   ASC_KEY_P8      the full text of the downloaded AuthKey_XXXXXXXX.p8 file
+# Create the key at appstoreconnect.apple.com -> Users and Access -> Integrations -> App Store Connect API (role: App Manager or Admin).
+# Signing uses Xcode's cloud-managed certificates through that key, so no certificate or provisioning profile has to be stored here.
+#
+# The bundle ID is com.jwhit49.routeme (see capacitor.config.json), the same app record the old Expo build used.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload to TestFlight after building
+        type: boolean
+        default: true
+      build_number:
+        description: Build number (blank = 1000 + run number). Must be higher than every build already in App Store Connect.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    if: github.repository_owner == 'JWHIT49'
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test
+        run: npm test
+
+      # Copies the web files into www/ and syncs them (and the native plugins) into the Xcode project.
+      - name: Sync web app into the iOS project
+        run: npm run cap:sync
+
+      - name: Check signing secrets
+        run: |
+          for v in TEAM_ID KEY_ID ISSUER_ID; do
+            if [ -z "${!v}" ]; then echo "::error::Missing secret for $v (see the setup notes at the top of this workflow)"; exit 1; fi
+          done
+
+      - name: Write the App Store Connect API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8"
+          echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8" >> "$GITHUB_ENV"
+
+      - name: Archive
+        run: |
+          BUILD_NUMBER="${{ inputs.build_number }}"
+          if [ -z "$BUILD_NUMBER" ]; then BUILD_NUMBER=$((1000 + GITHUB_RUN_NUMBER)); fi
+          echo "Build number: $BUILD_NUMBER"
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Export, and upload to TestFlight if requested
+        run: |
+          DEST=export
+          if [ "${{ inputs.upload }}" = "true" ]; then DEST=upload; fi
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>$DEST</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Keep the build when not uploading
+        if: ${{ !inputs.upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: myNonRev-ios
+          path: ${{ runner.temp }}/export

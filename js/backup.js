@@ -2,10 +2,21 @@
 import { h } from './dom.js';
 import * as vault from './vault.js';
 import { openSheet, passwordField, toast } from './ui.js';
+import { isNative, plugin } from './native.js';
 
 export async function exportBackup() {
   const text = vault.exportBackup();
   const name = `myNonRev-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  if (isNative()) {
+    // A native web view cannot download blobs: write the file and hand it to the iOS share sheet (Save to Files, iCloud Drive, ...).
+    try {
+      const { uri } = await plugin('Filesystem').writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
+      await plugin('Share').share({ title: 'myNonRev backup', files: [uri] });
+    } catch (err) {
+      if (!/cancel/i.test(String(err?.message ?? err))) toast('Could not export the backup.');
+    }
+    return;
+  }
   const file = new File([text], name, { type: 'application/json' });
   if (navigator.canShare?.({ files: [file] })) {
     try {

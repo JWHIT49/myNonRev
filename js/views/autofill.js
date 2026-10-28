@@ -5,6 +5,7 @@ import { bookmarkletUrl, newAutofillKey } from '../autofill/bookmarklet.js';
 import { confirmSheet, toast } from '../ui.js';
 import { copyText } from '../clip.js';
 import * as router from '../router.js';
+import { isNative } from '../native.js';
 
 const step = (n, ...children) => h('li', { class: 'step' }, h('span', { class: 'step-n', 'aria-hidden': 'true' }, String(n)), h('div', { class: 'step-body' }, ...children));
 
@@ -25,6 +26,7 @@ async function resetKey() {
 }
 
 export function autofillView() {
+  if (isNative()) return { redirect: '/' };
   const data = vault.snapshot();
   const key = data.autofillKey;
 

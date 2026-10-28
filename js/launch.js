@@ -4,10 +4,13 @@ import { h } from './dom.js';
 import * as vault from './vault.js';
 import { copyLazy } from './clip.js';
 import { sealLoginCode, loginPayload } from './autofill/bookmarklet.js';
+import { isNative } from './native.js';
+import { openInApp } from './inapp.js';
 import { toast } from './ui.js';
 
+/** Can this portal sign in for you? In the native app any saved login can. In a browser it also needs the autofill bookmarklet set up. */
 export function autofillReady(data, portalId) {
-  return Boolean(data.autofillKey && data.creds[portalId]?.username);
+  return Boolean(data.creds[portalId]?.username) && (isNative() || Boolean(data.autofillKey));
 }
 
 function openTab(url) {
@@ -18,10 +21,24 @@ function openTab(url) {
   a.remove();
 }
 
-/** Opens the portal's site; with autofill set up, first puts an encrypted login code on the clipboard for the bookmarklet. */
+async function openNative(portal, sign, data) {
+  try {
+    await openInApp(portal, sign ? loginPayload(portal, data.creds[portal.id]) : null);
+  } catch (err) {
+    console.warn('In-app browser failed', err);
+    toast('Could not open the in-app browser. Opening the site in Safari instead.');
+    openTab(portal.url);
+  }
+}
+
+/**
+ * Opens the portal's site. In the native app that is the in-app browser, signed in automatically. In a browser it opens a tab and, with
+ * autofill set up, first puts an encrypted login code on the clipboard for the bookmarklet.
+ */
 export async function openPortal(portal, { autofill = true } = {}) {
   const data = vault.snapshot();
   const sign = autofill && autofillReady(data, portal.id);
+  if (isNative()) { await openNative(portal, sign, data); return; }
   const copied = sign ? copyLazy(() => sealLoginCode(data.autofillKey, loginPayload(portal, data.creds[portal.id]))) : null;
   openTab(portal.url);
   if (!sign) return;

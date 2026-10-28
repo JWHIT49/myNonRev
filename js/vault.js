@@ -26,6 +26,11 @@ let storage = () => globalThis.localStorage;
 /** Tests inject an in-memory store; the app uses localStorage. */
 export const useStorage = (provider) => { storage = provider; };
 
+// The native app keeps a second, more durable copy of the encrypted envelope (see native.js). null means the vault was erased.
+let persistHook = null;
+export const onPersist = (fn) => { persistHook = fn; };
+const persist = (text) => { try { Promise.resolve(persistHook?.(text)).catch(() => {}); } catch { /* best effort */ } };
+
 let session = null; // { dek: CryptoKey, data: object }
 let queue = Promise.resolve();
 const listeners = new Set();
@@ -40,6 +45,7 @@ export const isUnlocked = () => session !== null;
 
 function writeRaw(text) {
   try { storage().setItem(STORAGE_KEY, text); } catch (err) { throw new VaultError('storage', `Your device would not save the vault (${err.message || 'storage is full or blocked'}).`); }
+  persist(text);
 }
 
 const isB64 = (s, min = 1) => typeof s === 'string' && s.length >= min && /^[A-Za-z0-9+/]+={0,2}$/.test(s);
@@ -165,5 +171,6 @@ export async function importBackup(text, passphrase) {
 export function erase() {
   session = null;
   try { storage().removeItem(STORAGE_KEY); } catch { /* nothing to remove */ }
+  persist(null);
   notify();
 }
