@@ -1,0 +1,91 @@
+# myNonRev
+
+An offline-first **PWA** that keeps your airline nonrev logins in an **encrypted vault** and gets you into each portal with one tap. It is the web rebuild of the RouteMe / myNonRev React Native app, structured like the CertStudy PWA: plain ES modules, no framework, no runtime dependencies, strict Content-Security-Policy, and a build-hashed service worker.
+
+Built-in portals: **American Airlines** (Travel Planner), **Delta** (TravelNet), **myIDTravel**, **United**, **Southwest**. You can add your own in the app.
+
+## What changed from the native app (and why)
+
+The native app opened each airline site inside a WebView and injected a script into it. **A web app cannot do that**: browsers block scripts and iframes from reaching into another site. So the PWA splits the job in two:
+
+| | Native app | PWA |
+|---|---|---|
+| Storing logins | iOS Keychain | AES-GCM encrypted vault, unlocked with a passphrase |
+| Opening a portal | In-app WebView | Opens the site in a browser tab |
+| Typing the login | Injected automatically | **Copy buttons**, or the **autofill bookmarklet** (below) |
+| Lock | Face ID | Passphrase, with auto-lock (Face ID is not possible without a native app) |
+
+The autofill engine itself is a straight port of the RouteMe one (username, Next, password, Sign in, then click-through steps), so the sign-in behaviour is the same once it runs.
+
+## Features
+
+- **Encrypted vault**: logins are encrypted with a key wrapped by your passphrase (PBKDF2-SHA-256, 600,000 iterations, AES-GCM). The vault is ciphertext at rest and only decrypted in memory while unlocked.
+- **Auto-lock** when you leave the app or it sits idle (On leave / 1 / 5 / 15 min).
+- **One-tap launcher** for every portal, plus copy buttons for username and password. Copied passwords are wiped from the clipboard after 30 seconds (browsers only allow this while the app is in front, so it happens when you return to it).
+- **Autofill bookmarklet** for hands-off sign-in on the airline's own page (see below).
+- **Custom portals** with their own name, address and colour.
+- **Encrypted backup** export and restore (new phone, or insurance against Safari clearing site data).
+- Works **offline**, installs to the Home Screen, light/dark theme, update prompt when a new version is deployed.
+
+## Autofill: how it works
+
+1. Open **Autofill** in the app and tap **Set up autofill**. This makes a random key that lives only in your vault.
+2. Tap **Copy bookmark code**, then in Safari create a bookmark named *myNonRev* and paste the code as its address (the app lists the exact steps).
+3. In the app, tap **Sign in** on a portal. It copies an **encrypted login code** and opens the site.
+4. On the airline page, open Bookmarks and tap **myNonRev**. It reads the code, decrypts it with the key stored in the bookmark, and runs the sign-in engine. If the site moves to a new page part-way, tap the bookmark again; it picks up where it left off.
+
+The clipboard only ever holds ciphertext, the code is useless without your bookmark's key, and it expires after 5 minutes. If the clipboard can't be read, the bookmark offers a paste box instead.
+
+**iPhone caveat:** links opened from the Home Screen app may show in a small in-app viewer that has no Bookmarks menu. Tap its Safari icon (or Share, then *Open in Safari*) first. This is iOS behaviour and could not be tested from a desktop; the plain copy buttons always work.
+
+## Run it
+
+Requires Node 20 or newer. There is nothing to install.
+
+```powershell
+npm test              # unit tests (vault, encryption, login codes, bookmarklet, portals)
+npm start             # dev server at http://127.0.0.1:8080/
+npm run build         # regenerate build.json + precache.js after changing any file
+npm run check         # CI: fail if those generated files are stale
+```
+
+`npm start -- --lan` serves on your network, but iOS only allows service workers and WebCrypto on **https** (localhost is exempt), so to try it on a phone, deploy it.
+
+`tests/fixtures/login.html` is a fake two-step airline login you can open at `http://127.0.0.1:8080/fixtures/login.html` to try the bookmarklet without touching a real site. It is not deployed.
+
+## Deploy to GitHub Pages
+
+1. Create a GitHub repository (the workflow is restricted to the `JWHIT49` account, same as CertStudy), push this folder, and in **Settings, Pages** set the source to **GitHub Actions**.
+2. `.github/workflows/pages.yml` runs the tests, checks the generated files, and publishes `https://jwhit49.github.io/<repo>/`.
+3. On your iPhone open that address in **Safari**, tap Share, then **Add to Home Screen**, and create your vault **in the installed app** (storage in Safari and in the installed app is separate).
+4. Run `npm run build` and commit `precache.js` / `build.json` whenever you change any file under `js/`, `css/`, `icons/`, `index.html`, `manifest.webmanifest` or `sw.js`. Installed copies then show an **Update** prompt.
+
+## Security notes
+
+- Nothing leaves the device. The CSP allows no connections except to the app's own origin, and there is no analytics or cloud sync.
+- A forgotten passphrase cannot be recovered. Keep an exported backup somewhere safe (it is encrypted too).
+- Use a long passphrase: it is the only thing between someone with your unlocked phone's storage and your logins.
+- **GitHub Pages shares one origin across all of an account's project sites**, including CertStudy. The vault is encrypted so other pages can only see ciphertext, but a script on another page of that origin could read or delete it. For stronger isolation, host this under its own domain or account.
+- The password is briefly in the page's memory while unlocked or revealed; the vault locks itself and drops the key and data when it locks.
+- Use this only for your own accounts and authorized employee travel.
+
+## Tuning the click-through steps
+
+Portals are defined in [js/portals.js](js/portals.js). Each `navSteps` entry is `{ text: 'regex', label: 'Friendly name', timeout: 12000 }`, where `text` is a case-insensitive regular expression matched against a link or button's visible text. American's two steps are enabled; the others ship empty. After editing, run `npm test` (it checks every regex compiles) and `npm run build`. The steps travel inside the encrypted login code each time, so the bookmark does not need to be reinstalled.
+
+## Project layout
+
+```
+index.html, manifest.webmanifest, sw.js    PWA shell and offline service worker
+precache.js, build.json                    generated by tools/build.mjs
+css/app.css                                styles (light/dark)
+icons/                                     app icons
+js/main.js                                 boot, routes, lock guard
+js/crypto.js, js/vault.js                  encryption primitives and the encrypted vault
+js/autofill/engine.js                      sign-in state machine (ported from RouteMe)
+js/autofill/bookmarklet.js                 login codes and bookmarklet builder
+js/portals.js                              portal catalogue and custom portals
+js/views/                                  lock, home, portal, edit, autofill, settings
+tools/                                     build and dev server
+tests/                                     node:test suites and a fake-airline fixture
+```

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fake airline login (myNonRev autofill fixture)</title>
+  <style>body{font:16px system-ui;margin:0;padding:72px 16px 16px}input,button{font:inherit;padding:10px;margin:4px 0}[hidden]{display:none}a{display:block;margin:8px 0}</style>
+</head>
+<body>
+  <!-- A stand-in for American's flow: username -> Next -> password -> Sign in -> gate page -> portal page -> Travel Planner. Dev only. -->
+  <h1>Fake Airline</h1>
+  <div id="step1"><label>AA ID <input id="uid" name="username" autocomplete="username"></label><br><button id="next" type="button">Next</button><br><a href="#">Forgot password?</a></div>
+  <div id="step2" hidden><label>Password <input id="pw" name="password" type="password"></label><br><button id="go" type="button">Sign in</button></div>
+  <div id="gate" hidden><h2>Something went wrong</h2><a href="#" id="republic">Republic Airways Site &gt;&gt;</a><a href="#" id="retiree">American Airlines Retiree Site &gt;&gt;</a><a href="#" id="regional">Regional Retiree Site &gt;&gt;</a></div>
+  <div id="portal" hidden><h2>Employee portal</h2><a href="#" id="tp">Travel Planner</a><p>Travel Planner lets you look up routes.</p></div>
+  <div id="app" hidden><h2>Route lookup</h2><label>From <input id="from" name="from"></label></div>
+  <script>
+    window.__submitted = null;
+    window.__log = [];
+    const $ = (id) => document.getElementById(id);
+    const show = (id) => { for (const s of ['step1', 'step2', 'gate', 'portal', 'app']) $(s).hidden = s !== id; window.__log.push(id); };
+    $('next').onclick = () => { if ($('uid').value) show('step2'); };
+    $('go').onclick = () => { window.__submitted = { u: $('uid').value, p: $('pw').value }; show('gate'); };
+    $('regional').onclick = (e) => { e.preventDefault(); show('portal'); };
+    $('retiree').onclick = $('republic').onclick = (e) => { e.preventDefault(); window.__log.push('WRONG LINK'); };
+    $('tp').onclick = (e) => { e.preventDefault(); show('app'); };
+  </script>
+</body>
+</html>
